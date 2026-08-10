@@ -144,7 +144,7 @@ function Listing({ slots, urlMap, formUrl, onGoConsult, onOpen }) {
       <section className="hero">
         <div className="hero-live"><span className="live-dot" /> 지금 예약 가능한 날짜 {openCount}건</div>
         <h1 className="hero-title">기다리던 그 날짜가,<br /><em>지금 예약 가능</em>합니다</h1>
-        <p className="hero-sub">제휴 웨딩홀의 예약 가능한 자리를 정식으로 안내해 드려요.<br />원하는 날, 더 빠르고 합리적으로.</p>
+        <p className="hero-sub">식장 잡는데 1년?<br />아닙니다. 더 빠르고, 저렴하게 이용하세요.</p>
         <button className="hero-cta" onClick={onGoConsult}>희망 내용 작성하기 →</button>
       </section>
 
@@ -366,13 +366,31 @@ export default function App() {
 
   const formUrl = settings.google_form || "";
 
+  // 페이지 이동 (브라우저 히스토리 반영 + 맨 위로 스크롤)
+  const navigate = (next, push = true) => {
+    setRoute(next);
+    if (push && typeof history !== "undefined") history.pushState(next, "");
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
+
+  // 폰 뒤로가기 버튼 → 이전 화면으로 (창 닫힘 방지)
+  useEffect(() => {
+    if (typeof history !== "undefined") history.replaceState({ page: "list", id: null }, "");
+    const onPop = (e) => {
+      setRoute(e.state || { page: "list", id: null });
+      window.scrollTo({ top: 0, behavior: "auto" });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   // 상담 폼으로 부드럽게 스크롤 (상세 페이지면 목록으로 이동 후 스크롤)
   const goConsult = () => {
-    setRoute({ page: "list" });
+    if (route.page !== "list") navigate({ page: "list", id: null });
     setTimeout(() => {
       const el = document.getElementById("consult");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
+    }, 80);
   };
 
   const refresh = async () => {
@@ -395,18 +413,18 @@ export default function App() {
 
   const slot = slots.find((s) => s.id === route.id);
 
-  if (loading) return <div className="boot"><Style />불러오는 중…</div>;
+  if (loading) return <div className="boot"><Style /><span className="boot-logo">오늘의<b>웨딩</b></span></div>;
 
   return (
-    <div className="root">
+    <div className="root fade-in">
       <Style />
       {err && route.page === "list" && <div className="err-bar">{err}</div>}
       {route.page === "list" && (
         <Listing slots={slots} urlMap={urlMap} formUrl={formUrl} onGoConsult={goConsult}
-          onOpen={(id) => setRoute({ page: "detail", id })} />
+          onOpen={(id) => navigate({ page: "detail", id })} />
       )}
-      {route.page === "detail" && slot && <Detail slot={slot} urlMap={urlMap} formUrl={formUrl} onGoConsult={goConsult} onBack={() => setRoute({ page: "list" })} />}
-      {route.page === "detail" && !slot && <div className="empty" style={{ padding: 80 }}>자리를 찾을 수 없어요. <button className="link" onClick={() => setRoute({ page: "list" })}>목록으로</button></div>}
+      {route.page === "detail" && slot && <Detail slot={slot} urlMap={urlMap} formUrl={formUrl} onGoConsult={goConsult} onBack={() => history.back()} />}
+      {route.page === "detail" && !slot && <div className="empty" style={{ padding: 80 }}>자리를 찾을 수 없어요. <button className="link" onClick={() => navigate({ page: "list", id: null })}>목록으로</button></div>}
     </div>
   );
 }
@@ -424,7 +442,12 @@ function Style() {
     *{box-sizing:border-box}
     .root{font-family:'Pretendard',system-ui,sans-serif; color:var(--ink); background:var(--bg); min-height:100vh}
     button{font-family:inherit; cursor:pointer}
-    .boot{padding:80px; text-align:center; color:var(--ink2); font-family:'Pretendard',sans-serif}
+    .boot{min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); font-family:'Pretendard',sans-serif}
+    .boot-logo{font-size:26px; font-weight:800; color:var(--ink); letter-spacing:-.5px; animation:pulse 1.1s ease-in-out infinite}
+    .boot-logo b{color:var(--rose); font-weight:800}
+    @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+    .fade-in{animation:fadeIn .4s ease both}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
     .empty{padding:60px; text-align:center; color:var(--ink2)}
     .err-bar{margin:0 40px; margin-top:14px; padding:12px 16px; border-radius:12px; font-size:13px; background:#fdf0ee; border:1px solid #f3d9d5; color:#b06e7a}
 
