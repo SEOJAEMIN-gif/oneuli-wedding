@@ -1,42 +1,299 @@
--- ============================================================
---  오늘의웨딩 · 웨딩홀 상담 문의 테이블
---  → CRM과 같은 Supabase(라스트메이트)의 SQL Editor에 붙여넣고 [Run]!
---  → 접수(insert)는 누구나, 조회는 로그인 관리자만 (안전)
--- ============================================================
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>오늘의웨딩 · 웨딩홀 상담 문의</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400;1,500&family=Hahmlet:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    /* 오늘의웨딩 톤 — 화이트 + 로즈핑크 */
+    --bg:#FFFFFF; --bg-2:#FDF2F5; --surface:#FFFFFF; --surface-hover:#FDEEF3;
+    --line:rgba(227,91,134,.20); --line-strong:rgba(227,91,134,.42);
+    --rose:#E35B86; --rose-lite:#D44A79; --rose-deep:#C8426C;
+    --text:#2E2228; --text-2:#7A6168; --text-3:#B7A0A8; --err:#C0563F;
+    --serif:"Hahmlet","Nanum Myeongjo",serif;
+    --editorial:"Cormorant Garamond",serif;
+    --sans:"Pretendard",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow:hidden;}
+  .stage{position:fixed;top:0;left:0;right:0;height:100vh;height:100dvh;display:flex;flex-direction:column;
+    background:radial-gradient(120% 80% at 85% -10%,rgba(227,91,134,.08),transparent 60%),
+      radial-gradient(90% 70% at 0% 110%,rgba(245,169,194,.10),transparent 55%),var(--bg);}
+  .topbar{position:relative;z-index:5;display:flex;align-items:center;gap:14px;padding:max(18px,env(safe-area-inset-top)) 22px 14px;}
+  .brand{font-family:var(--serif);font-weight:700;font-size:17px;letter-spacing:.02em;color:var(--text);}
+  .brand b{color:var(--rose);}
+  .backbtn{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--text-2);
+    display:grid;place-items:center;cursor:pointer;transition:.25s;flex-shrink:0;opacity:0;pointer-events:none;}
+  .backbtn.show{opacity:1;pointer-events:auto;}
+  .backbtn:hover{border-color:var(--line-strong);color:var(--rose);background:var(--surface-hover);}
+  .spacer{flex:1;}
+  .counter{font-family:var(--editorial);font-style:italic;font-size:15px;color:var(--text-3);}
+  .counter b{color:var(--rose);font-style:normal;font-family:var(--sans);font-weight:600;}
+  .progress{height:3px;background:rgba(227,91,134,.12);position:relative;z-index:5;}
+  .progress .fill{height:100%;width:0;background:var(--rose);transition:width .5s cubic-bezier(.22,1,.36,1);}
+  .scene{flex:1;position:relative;overflow:hidden;}
+  .panel{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:8px 24px calc(26px + env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch;
+    opacity:0;transform:translateY(16px);pointer-events:none;transition:opacity .45s ease,transform .45s cubic-bezier(.22,1,.36,1);}
+  .panel.active{opacity:1;transform:none;pointer-events:auto;}
+  .panel.leave{opacity:0;transform:translateY(-14px);transition:.3s ease;}
+  .inner{width:100%;max-width:540px;margin:0 auto;}
+  .emblem{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;margin-bottom:18px;color:var(--rose);
+    border:1px solid var(--line-strong);background:radial-gradient(circle at 50% 34%,rgba(227,91,134,.12),transparent 72%);}
+  .emblem svg{width:24px;height:24px;}
+  .eyebrow{font-family:var(--editorial);font-style:italic;font-size:17px;color:var(--rose);letter-spacing:.04em;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+  .eyebrow::after{content:"";height:1px;flex:1;max-width:60px;background:var(--line-strong);}
+  .q{font-family:var(--serif);font-weight:700;font-size:27px;line-height:1.45;letter-spacing:-.01em;color:var(--text);margin-bottom:8px;}
+  .q .hl{color:var(--rose);}
+  .hint{font-size:14px;color:var(--text-3);margin-bottom:26px;line-height:1.6;}
+  .opts{display:flex;flex-direction:column;gap:11px;}
+  .opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px 18px;border-radius:14px;
+    background:var(--surface);border:1px solid var(--line);color:var(--text);font-size:16px;font-weight:500;cursor:pointer;transition:.2s;font-family:var(--sans);box-shadow:0 2px 10px rgba(227,91,134,.05);}
+  .opt:hover{background:var(--surface-hover);border-color:var(--line-strong);transform:translateY(-1px);box-shadow:0 6px 16px rgba(227,91,134,.1);}
+  .opt .key{width:26px;height:26px;border-radius:7px;flex-shrink:0;border:1px solid var(--line-strong);display:grid;place-items:center;font-size:12px;color:var(--rose);font-weight:700;transition:.2s;}
+  .opt.sel{border-color:transparent;background:var(--surface-hover);box-shadow:0 0 0 1.5px var(--rose);}
+  .opt.sel .key{background:var(--rose);color:#fff;border-color:transparent;}
+  .field{position:relative;}
+  .field input{width:100%;background:transparent;border:none;border-bottom:1.5px solid var(--line-strong);
+    color:var(--text);font-family:var(--serif);font-weight:500;font-size:24px;padding:10px 2px;outline:none;transition:border-color .25s;}
+  .field input::placeholder{color:var(--text-3);opacity:.7;}
+  .field input:focus{border-color:var(--rose);}
+  .stack{display:flex;flex-direction:column;gap:22px;}
+  .stack label{display:block;font-size:13px;color:var(--rose);letter-spacing:.03em;margin-bottom:6px;font-weight:600;}
+  .consent{display:flex;align-items:flex-start;gap:11px;margin-top:6px;cursor:pointer;user-select:none;}
+  .consent .box{width:22px;height:22px;border-radius:6px;flex-shrink:0;margin-top:1px;border:1px solid var(--line-strong);display:grid;place-items:center;transition:.2s;}
+  .consent.on .box{background:var(--rose);border-color:transparent;}
+  .consent .box svg{opacity:0;transition:.2s;}
+  .consent.on .box svg{opacity:1;}
+  .consent p{font-size:13px;color:var(--text-2);line-height:1.55;}
+  .consent p a{color:var(--rose);text-decoration:underline;text-underline-offset:2px;}
+  .cta{margin-top:30px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .btn{appearance:none;border:none;cursor:pointer;font-family:var(--sans);font-weight:600;font-size:16px;padding:15px 30px;border-radius:12px;
+    background:var(--rose);color:#fff;letter-spacing:.02em;transition:.2s;box-shadow:0 8px 20px -8px rgba(227,91,134,.5);}
+  .btn:hover{transform:translateY(-2px);background:var(--rose-deep);box-shadow:0 14px 28px -10px rgba(227,91,134,.6);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;}
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px;margin-right:8px;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .enterhint{font-size:13px;color:var(--text-3);}
+  .enterhint kbd{font-family:var(--sans);background:var(--bg-2);border:1px solid var(--line);border-radius:5px;padding:2px 7px;font-size:11px;color:var(--text-2);}
+  .err{color:var(--err);font-size:13px;margin-top:12px;min-height:16px;opacity:0;transition:.2s;}
+  .err.show{opacity:1;}
+  .intro .inner{text-align:center;}
+  .intro .kicker{font-family:var(--editorial);font-style:italic;font-size:19px;color:var(--rose);letter-spacing:.05em;margin-bottom:16px;}
+  .intro h1{font-family:var(--serif);font-weight:700;font-size:31px;line-height:1.5;letter-spacing:-.01em;margin-bottom:18px;}
+  .intro h1 .hl{color:var(--rose);}
+  .intro p{font-size:15px;color:var(--text-2);line-height:1.75;margin-bottom:32px;}
+  .intro .cta{justify-content:center;flex-direction:column;gap:14px;}
+  .intro .btn{padding:16px 46px;}
+  .meta{font-size:13px;color:var(--text-3);display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+  .meta span{display:flex;align-items:center;gap:6px;}
+  .rule{width:44px;height:1px;background:var(--line-strong);margin:0 auto 20px;}
+  .done .inner{text-align:center;}
+  .seal{width:88px;height:88px;border-radius:50%;margin:0 auto 28px;display:grid;place-items:center;
+    background:radial-gradient(circle at 50% 35%,rgba(227,91,134,.14),transparent 70%);border:1px solid var(--line-strong);}
+  .done h1{font-family:var(--serif);font-weight:700;font-size:28px;line-height:1.45;margin-bottom:18px;}
+  .done h1 .hl{color:var(--rose);}
+  .done p{font-size:15px;color:var(--text-2);line-height:1.75;}
+  @media (max-width:560px){
+    .panel:not(.intro):not(.done){justify-content:flex-start;padding-top:20px;}
+    .cta{gap:10px;} .btn{width:100%;text-align:center;} .enterhint{display:none;}
+    .emblem{width:48px;height:48px;margin-bottom:16px;}
+  }
+  @media (max-width:420px){.q{font-size:23px;}.intro h1{font-size:26px;}.field input{font-size:22px;}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar">
+    <button class="backbtn" id="back" aria-label="이전">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="brand">오늘의<b>웨딩</b></div>
+    <div class="spacer"></div>
+    <div class="counter" id="counter"></div>
+  </div>
+  <div class="progress"><div class="fill" id="fill"></div></div>
+  <div class="scene" id="scene"></div>
+</div>
 
-create table if not exists public.wedding_inquiries (
-  id uuid primary key default gen_random_uuid(),
-  created_at timestamptz default now(),
-  event_date text,
-  region text,
-  guests text,
-  budget text,
-  name text,
-  phone text,
-  handled boolean default false
-);
+<script>
+/* ══════════════ ① Supabase 설정 (오늘의웨딩 프로젝트 것으로!) ══════════════ */
+const SUPABASE_URL      = "https://huozijsbuasyawzxkuse.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_T_5WZICZ2d3YcWhE25hX8Q_gXGDhj9-";
+const TABLE             = "wedding_inquiries";
+const CONFIGURED = !SUPABASE_URL.includes("YOUR-PROJECT") && !SUPABASE_ANON_KEY.includes("YOUR-");
+const sb = (CONFIGURED && window.supabase) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-alter table public.wedding_inquiries enable row level security;
+/* ══════════════ 아이콘 ══════════════ */
+const A='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">';
+const ICONS={
+  cal:A+'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9.5h16M8.5 3v4M15.5 3v4"/></svg>',
+  pin:A+'<path d="M12 21s6.5-5.5 6.5-11A6.5 6.5 0 105 10c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>',
+  people:A+'<circle cx="9" cy="8" r="2.7"/><path d="M3.8 19c0-2.9 2.3-5.2 5.2-5.2S14.2 16.1 14.2 19"/><circle cx="16.6" cy="9" r="2.1"/><path d="M15 14c2.4.2 4.3 2.2 4.3 4.8"/></svg>',
+  money:A+'<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.4"/><circle cx="5.8" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="18.2" cy="12" r=".8" fill="currentColor" stroke="none"/></svg>',
+  pen:A+'<path d="M4 20h16"/><path d="M14.3 6.3l3.4 3.4L9 18.4l-3.6.6.6-3.6z"/></svg>',
+  phone:A+'<path d="M6 3.5h3l1.5 4-2 1.4a11 11 0 005 5l1.4-2 4 1.5v3c0 1-.9 1.8-1.9 1.7C10.8 22.7 2.3 14.2 2.8 5.4 2.9 4.4 3.7 3.5 4.7 3.5z"/></svg>'
+};
 
--- 접수에 필요한 권한
-grant usage on schema public to anon, authenticated;
-grant insert on public.wedding_inquiries to anon, authenticated;
-grant select, update, delete on public.wedding_inquiries to authenticated;
+/* ══════════════ ② 질문지 ══════════════ */
+const QUESTIONS = [
+  { type:"text",   icon:"cal",    eyebrow:"Wedding date", q:"예식 <span class='hl'>날짜</span>는 언제쯤 생각하세요?", hint:"정해진 날짜 또는 희망 시기를 자유롭게 적어주세요.", key:"date", placeholder:"예: 2026년 11월, 또는 11월 중순" },
+  { type:"single", icon:"pin",    eyebrow:"Location",     q:"희망하시는 <span class='hl'>지역</span>을 선택해 주세요.", key:"region", options:["서울","경기 · 인천","지방 광역시","그 외 지역"] },
+  { type:"single", icon:"people", eyebrow:"Guests",       q:"예상 <span class='hl'>하객 인원</span>은 어느 정도일까요?", key:"guests", options:["100명 이하","100~200명","200~300명","300~400명","400~500명","500명 이상"] },
+  { type:"single", icon:"money",  eyebrow:"Budget",       q:"생각하시는 <span class='hl'>예산</span> 범위는요?", hint:"대관·식대 포함 대략적인 예산이면 돼요.", key:"budget", options:["2천만원 이하","2~3천만원","3~4천만원","4~5천만원","5~7천만원","7천만원~1억원"] },
+  { type:"text",   icon:"pen",    eyebrow:"About you",    q:"성함을 알려주세요.", key:"name", placeholder:"이름 입력" }
+];
 
--- 1) 접수(insert): 누구나 가능 (공개 문의 폼)
-drop policy if exists "public insert wedding" on public.wedding_inquiries;
-create policy "public insert wedding" on public.wedding_inquiries
-  for insert with check (true);
+/* ══════════════════════════════════════ */
+const scene=document.getElementById("scene"), fill=document.getElementById("fill"),
+      counter=document.getElementById("counter"), backBtn=document.getElementById("back");
+const answers={};
+let current=null, step=-1;
+const TOTAL=QUESTIONS.length+1;
 
--- 2) 조회/수정/삭제: 로그인한 관리자만
-drop policy if exists "auth read wedding" on public.wedding_inquiries;
-create policy "auth read wedding" on public.wedding_inquiries
-  for select to authenticated using (true);
+function panel(html,cls=""){const p=document.createElement("div");p.className="panel "+cls;p.innerHTML=`<div class="inner">${html}</div>`;return p;}
+function mount(node){
+  const old=scene.querySelector(".panel.active");
+  if(old){old.classList.add("leave");old.classList.remove("active");setTimeout(()=>old.remove(),320);}
+  scene.appendChild(node);current=node;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>node.classList.add("active")));
+}
+function updateChrome(){
+  const isQ=step>=0&&step<=QUESTIONS.length;
+  backBtn.classList.toggle("show",isQ);
+  if(isQ){const shown=Math.min(step+1,TOTAL);counter.innerHTML=`<b>${shown}</b> / ${TOTAL}`;fill.style.width=((shown-1)/TOTAL*100+6)+"%";}
+  else if(step>QUESTIONS.length){counter.innerHTML="";fill.style.width="100%";}
+  else{counter.innerHTML="";fill.style.width="0%";}
+}
 
-drop policy if exists "auth update wedding" on public.wedding_inquiries;
-create policy "auth update wedding" on public.wedding_inquiries
-  for update to authenticated using (true) with check (true);
+function renderIntro(){
+  mount(panel(`
+    <div class="kicker">Today's Wedding</div><div class="rule"></div>
+    <h1>원하는 조건만 알려주세요,<br>딱 맞는 <span class="hl">웨딩홀</span>을 찾아드립니다.</h1>
+    <p>예약 가능한 식장을 더 빠르고 저렴하게.<br>간단히 답해주시면 담당자가 직접 안내해드려요.</p>
+    <div class="cta">
+      <button class="btn" id="start">웨딩홀 문의하기</button>
+      <div class="meta"><span>⏱ 약 30초 소요</span><span>🔒 정보는 안전하게 보호됩니다</span></div>
+    </div>`,"intro"));
+  current.querySelector("#start").onclick=()=>go(0);
+}
 
-drop policy if exists "auth delete wedding" on public.wedding_inquiries;
-create policy "auth delete wedding" on public.wedding_inquiries
-  for delete to authenticated using (true);
+function renderQuestion(i){
+  const Q=QUESTIONS[i];
+  const emblem=Q.icon?`<div class="emblem">${ICONS[Q.icon]||""}</div>`:"";
+  const eyebrow=Q.eyebrow?`<div class="eyebrow">${Q.eyebrow}</div>`:"";
+  const hint=Q.hint?`<div class="hint">${Q.hint}</div>`:"";
+  let body="";
+  if(Q.type==="single"){
+    body=`<div class="opts">`+Q.options.map((o,idx)=>`<button class="opt" data-val="${o}"><span class="key">${idx+1}</span><span>${o}</span></button>`).join("")+`</div>`;
+  }else{
+    body=`<div class="field"><input id="inp" type="text" placeholder="${Q.placeholder||''}" autocomplete="off" /></div>
+      <div class="err" id="err"></div>
+      <div class="cta"><button class="btn" id="next">다음</button><span class="enterhint">또는 <kbd>Enter ↵</kbd></span></div>`;
+  }
+  mount(panel(`${emblem}${eyebrow}<div class="q">${Q.q}</div>${hint}${body}`));
+
+  if(Q.type==="single"){
+    const opts=[...current.querySelectorAll(".opt")];
+    opts.forEach(btn=>btn.onclick=()=>{opts.forEach(o=>o.classList.remove("sel"));btn.classList.add("sel");answers[Q.key]=btn.dataset.val;setTimeout(()=>go(i+1),300);});
+  }else{
+    const inp=current.querySelector("#inp"), next=current.querySelector("#next");
+    if(answers[Q.key])inp.value=answers[Q.key];
+    setTimeout(()=>inp.focus(),480);
+    inp.addEventListener("focus",()=>setTimeout(()=>{try{inp.scrollIntoView({block:"center",behavior:"smooth"});}catch(_){}} ,300));
+    const submit=()=>{const v=inp.value.trim();if(!v)return shake(inp,"내용을 입력해 주세요.");answers[Q.key]=v;go(i+1);};
+    next.onclick=submit;
+    inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();submit();}});
+  }
+}
+
+function renderContact(){
+  mount(panel(`
+    <div class="emblem">${ICONS.phone}</div>
+    <div class="eyebrow">Last step</div>
+    <div class="q">마지막으로, <span class="hl">연락처</span>를 남겨주세요.</div>
+    <div class="hint">확인 후 담당자가 예약 가능한 식장 정보와 함께 빠르게 연락드립니다.</div>
+    <div class="stack">
+      <div><label>연락처</label><div class="field"><input id="c_phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" autocomplete="tel" /></div></div>
+      <div class="consent" id="consent">
+        <span class="box"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <p>개인정보 수집 및 이용에 동의합니다. 수집된 정보는 <a href="#" onclick="return false">상담 목적</a>으로만 사용됩니다.</p>
+      </div>
+    </div>
+    <div class="err" id="err"></div>
+    <div class="cta"><button class="btn" id="submit" disabled>문의 남기기</button></div>`));
+
+  const phone=current.querySelector("#c_phone"), consent=current.querySelector("#consent"), submit=current.querySelector("#submit");
+  if(answers.phone)phone.value=answers.phone;
+  phone.addEventListener("input",()=>{
+    let d=phone.value.replace(/\D/g,"").slice(0,11);
+    if(d.length>7)d=d.replace(/(\d{3})(\d{4})(\d+)/,"$1-$2-$3");
+    else if(d.length>3)d=d.replace(/(\d{3})(\d+)/,"$1-$2");
+    phone.value=d;validate();
+  });
+  consent.onclick=()=>{consent.classList.toggle("on");validate();};
+  function validate(){submit.disabled=!(phone.value.replace(/\D/g,"").length>=10&&consent.classList.contains("on"));}
+  phone.addEventListener("focus",()=>setTimeout(()=>{try{phone.scrollIntoView({block:"center",behavior:"smooth"});}catch(_){}} ,300));
+  setTimeout(()=>phone.focus(),480);
+
+  submit.onclick=async()=>{
+    answers.phone=phone.value.trim();
+    submit.disabled=true;submit.innerHTML=`<span class="spin"></span>접수 중...`;
+    const err=current.querySelector("#err");err.classList.remove("show");
+    try{
+      if(CONFIGURED&&sb){
+        const{error}=await sb.from(TABLE).insert({
+          event_date:answers.date, region:answers.region, guests:answers.guests,
+          budget:answers.budget, name:answers.name, phone:answers.phone
+        });
+        if(error)throw error;
+      }else{
+        console.log("[데모 모드] 문의 데이터:",answers);
+        await new Promise(r=>setTimeout(r,600));
+      }
+      go(QUESTIONS.length+1);
+    }catch(e){
+      console.error(e);
+      err.textContent="일시적인 오류가 발생했어요. 잠시 후 다시 시도해 주세요.";err.classList.add("show");
+      submit.disabled=false;submit.textContent="문의 남기기";
+    }
+  };
+}
+
+function renderDone(){
+  mount(panel(`
+    <div class="seal"><svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#E35B86" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h1>문의가 접수되었습니다.<br><span class="hl">${answers.name||''}</span>님, 감사합니다.</h1>
+    <p>예약 가능한 식장 정보와 함께,<br>담당자가 <b style="color:var(--rose);font-weight:600">빠르게 연락</b>드리겠습니다.</p>`,"done"));
+  backBtn.classList.remove("show");
+}
+
+function go(to){
+  step=to;updateChrome();
+  if(step<0)return renderIntro();
+  if(step<QUESTIONS.length)return renderQuestion(step);
+  if(step===QUESTIONS.length)return renderContact();
+  return renderDone();
+}
+backBtn.onclick=()=>{if(step>=0&&step<=QUESTIONS.length)go(step-1);};
+document.addEventListener("keydown",e=>{
+  if(step<0||step>=QUESTIONS.length)return;
+  const Q=QUESTIONS[step];
+  if(Q.type==="single"&&/^[1-9]$/.test(e.key)){const t=current.querySelectorAll(".opt")[Number(e.key)-1];if(t)t.click();}
+});
+function shake(el,msg){
+  const err=current.querySelector("#err");
+  if(err){err.textContent=msg;err.classList.add("show");}
+  el.animate([{transform:"translateX(0)"},{transform:"translateX(-6px)"},{transform:"translateX(6px)"},{transform:"translateX(0)"}],{duration:260});
+}
+go(-1);
+</script>
+</body>
+</html>
