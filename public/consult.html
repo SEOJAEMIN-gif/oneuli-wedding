@@ -1,0 +1,42 @@
+-- ============================================================
+--  오늘의웨딩 · 웨딩홀 상담 문의 테이블
+--  → CRM과 같은 Supabase(라스트메이트)의 SQL Editor에 붙여넣고 [Run]!
+--  → 접수(insert)는 누구나, 조회는 로그인 관리자만 (안전)
+-- ============================================================
+
+create table if not exists public.wedding_inquiries (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  event_date text,
+  region text,
+  guests text,
+  budget text,
+  name text,
+  phone text,
+  handled boolean default false
+);
+
+alter table public.wedding_inquiries enable row level security;
+
+-- 접수에 필요한 권한
+grant usage on schema public to anon, authenticated;
+grant insert on public.wedding_inquiries to anon, authenticated;
+grant select, update, delete on public.wedding_inquiries to authenticated;
+
+-- 1) 접수(insert): 누구나 가능 (공개 문의 폼)
+drop policy if exists "public insert wedding" on public.wedding_inquiries;
+create policy "public insert wedding" on public.wedding_inquiries
+  for insert with check (true);
+
+-- 2) 조회/수정/삭제: 로그인한 관리자만
+drop policy if exists "auth read wedding" on public.wedding_inquiries;
+create policy "auth read wedding" on public.wedding_inquiries
+  for select to authenticated using (true);
+
+drop policy if exists "auth update wedding" on public.wedding_inquiries;
+create policy "auth update wedding" on public.wedding_inquiries
+  for update to authenticated using (true) with check (true);
+
+drop policy if exists "auth delete wedding" on public.wedding_inquiries;
+create policy "auth delete wedding" on public.wedding_inquiries
+  for delete to authenticated using (true);
